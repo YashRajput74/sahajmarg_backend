@@ -122,7 +122,6 @@ app.post("/generate-flashcards", upload.single("file"), async (req, res) => {
             console.log("Raw output was:", output);
         }
 
-        console.log({flashcards});
         res.json({ flashcards });
     } catch (err) {
         console.error("❌ Flashcard generation error:", err);
@@ -130,6 +129,74 @@ app.post("/generate-flashcards", upload.single("file"), async (req, res) => {
     }
 });
 
+app.post("/generate-quiz", upload.single("file"), async (req, res) => {
+    try {
+        let text = "";
+
+        if (req.file) {
+            const fileBuffer = fs.readFileSync(req.file.path);
+            const { value } = await mammoth.extractRawText({ buffer: fileBuffer });
+            fs.unlinkSync(req.file.path);
+            text = value;
+        } else if (req.body.text) {
+            text = req.body.text;
+        } else {
+            return res.status(400).json({ error: "No file or text provided." });
+        }
+
+        const response = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `
+                You are a helpful AI quiz maker.
+                Create 5 multiple-choice quiz questions from the following text.
+                Each question should have 4 options and one correct answer.
+
+                ⚠️ Return ONLY a valid JSON array — no markdown, no commentary.
+
+                Example format:
+                [
+                  {
+                    "question": "What is the capital of France?",
+                    "options": ["Paris", "London", "Berlin", "Madrid"],
+                    "answer": "Paris"
+                  },
+                  {
+                    "question": "Which element has the symbol H?",
+                    "options": ["Helium", "Hydrogen", "Hafnium", "Holmium"],
+                    "answer": "Hydrogen"
+                  }
+                ]
+
+                Text:
+                ${text}
+            `,
+        });
+
+        const output = response.output_text;
+        let quizzes = [];
+
+        try {
+            let cleaned = output
+                .replace(/```json/i, "")
+                .replace(/```/g, "")
+                .replace(/^Here.*?:/i, "")
+                .trim();
+
+            const jsonMatch = cleaned.match(/\[([\s\S]*)\]/);
+            if (jsonMatch) cleaned = `[${jsonMatch[1]}]`;
+
+            quizzes = JSON.parse(cleaned);
+        } catch (err) {
+            console.warn("⚠️ Error parsing AI output:", err.message);
+            console.log("Raw output was:", output);
+        }
+
+        res.json({ quizzes });
+    } catch (err) {
+        console.error("❌ Quiz generation error:", err);
+        res.status(500).json({ error: "Quiz generation failed." });
+    }
+});
 
 app.listen(5000, () =>
     console.log("✅ Backend running at http://localhost:5000")
