@@ -45,7 +45,6 @@ app.post("/summarize", upload.single("file"), async (req, res) => {
         const summaries = [];
 
         for (const [i, chunk] of chunks.entries()) {
-            console.log(`⚙️ Summarizing chunk ${i + 1}/${chunks.length}...`);
 
             const response = await client.responses.create({
                 model: "llama-3.1-8b-instant",
@@ -121,7 +120,7 @@ app.post("/generate-flashcards", upload.single("file"), async (req, res) => {
             console.warn("⚠️ Error parsing AI output:", err.message);
             console.log("Raw output was:", output);
         }
-
+        console.log({ flashcards });
         res.json({ flashcards });
     } catch (err) {
         console.error("❌ Flashcard generation error:", err);
@@ -195,6 +194,132 @@ app.post("/generate-quiz", upload.single("file"), async (req, res) => {
     } catch (err) {
         console.error("❌ Quiz generation error:", err);
         res.status(500).json({ error: "Quiz generation failed." });
+    }
+});
+
+
+// ======== TOPIC-BASED SUMMARIZATION ========
+app.post("/summarize-topic", async (req, res) => {
+    try {
+        const { topic } = req.body;
+        if (!topic || !topic.trim()) {
+            return res.status(400).json({ error: "Topic name is required." });
+        }
+
+        const response = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `Provide a clear, concise, and educational summary about the topic "${topic}". 
+            The summary should be informative, accurate, and easy to understand for a student.`,
+        });
+
+        const summary = response.output_text || "No summary generated.";
+        res.json({ summary });
+    } catch (err) {
+        console.error("❌ Topic summarization error:", err);
+        res.status(500).json({ error: "Failed to summarize topic." });
+    }
+});
+
+
+// ======== TOPIC-BASED FLASHCARDS ========
+app.post("/generate-flashcards-topic", async (req, res) => {
+    try {
+        const { topic } = req.body;
+        if (!topic || !topic.trim()) {
+            return res.status(400).json({ error: "Topic name is required." });
+        }
+
+        const response = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `
+                Create 5 helpful flashcards (question-answer pairs) about the topic "${topic}".
+                ⚠️ Return ONLY a valid JSON array — no markdown or text.
+
+                Example:
+                [
+                    {"question": "What is X?", "answer": "X is ..."},
+                    {"question": "Why does Y happen?", "answer": "Because ..."}
+                ]
+            `,
+        });
+
+        let output = response.output_text;
+        let flashcards = [];
+
+        try {
+            let cleaned = output
+                .replace(/```json/i, "")
+                .replace(/```/g, "")
+                .replace(/^Here.*?:/i, "")
+                .trim();
+
+            const jsonMatch = cleaned.match(/\[([\s\S]*)\]/);
+            if (jsonMatch) cleaned = `[${jsonMatch[1]}]`;
+
+            flashcards = JSON.parse(cleaned);
+        } catch (err) {
+            console.warn("⚠️ JSON parse error (topic flashcards):", err.message);
+            console.log("Raw output:", output);
+        }
+
+        res.json({ flashcards });
+    } catch (err) {
+        console.error("❌ Topic flashcards error:", err);
+        res.status(500).json({ error: "Failed to generate flashcards." });
+    }
+});
+
+
+// ======== TOPIC-BASED QUIZ ========
+app.post("/generate-quiz-topic", async (req, res) => {
+    try {
+        const { topic } = req.body;
+        if (!topic || !topic.trim()) {
+            return res.status(400).json({ error: "Topic name is required." });
+        }
+
+        const response = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `
+                Create 5 multiple-choice quiz questions about "${topic}".
+                Each question should have 4 options and one correct answer.
+
+                ⚠️ Return ONLY a valid JSON array — no markdown or commentary.
+
+                Example:
+                [
+                    {
+                        "question": "What is the capital of France?",
+                        "options": ["Paris", "London", "Berlin", "Madrid"],
+                        "answer": "Paris"
+                    }
+                ]
+            `,
+        });
+
+        let output = response.output_text;
+        let quizzes = [];
+
+        try {
+            let cleaned = output
+                .replace(/```json/i, "")
+                .replace(/```/g, "")
+                .replace(/^Here.*?:/i, "")
+                .trim();
+
+            const jsonMatch = cleaned.match(/\[([\s\S]*)\]/);
+            if (jsonMatch) cleaned = `[${jsonMatch[1]}]`;
+
+            quizzes = JSON.parse(cleaned);
+        } catch (err) {
+            console.warn("⚠️ JSON parse error (topic quiz):", err.message);
+            console.log("Raw output:", output);
+        }
+
+        res.json({ quizzes });
+    } catch (err) {
+        console.error("❌ Topic quiz error:", err);
+        res.status(500).json({ error: "Failed to generate quiz." });
     }
 });
 
