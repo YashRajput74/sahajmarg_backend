@@ -220,8 +220,6 @@ app.post("/summarize-topic", async (req, res) => {
     }
 });
 
-
-// ======== TOPIC-BASED FLASHCARDS ========
 app.post("/generate-flashcards-topic", async (req, res) => {
     try {
         const { topic } = req.body;
@@ -270,7 +268,6 @@ app.post("/generate-flashcards-topic", async (req, res) => {
 });
 
 
-// ======== TOPIC-BASED QUIZ ========
 app.post("/generate-quiz-topic", async (req, res) => {
     try {
         const { topic } = req.body;
