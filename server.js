@@ -5,12 +5,16 @@ import cors from "cors";
 import fs from "fs";
 import dotenv from "dotenv";
 import OpenAI from "openai";
-
 dotenv.config();
 
+const PORT = process.env.PORT || 5000;
 const app = express();
 const upload = multer({ dest: "uploads/" });
-app.use(cors({ origin: "http://localhost:5173" }));
+app.use(
+    cors({
+        origin: "*",
+    })
+);
 app.use(express.json());
 
 const client = new OpenAI({
@@ -320,6 +324,6 @@ app.post("/generate-quiz-topic", async (req, res) => {
     }
 });
 
-app.listen(5000, () =>
-    console.log("✅ Backend running at http://localhost:5000")
-);
+app.listen(PORT, () => {
+    console.log("✅ Server running on port " + PORT);
+});
