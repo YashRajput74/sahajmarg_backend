@@ -1,4 +1,4 @@
-import express from "express";
+/* import express from "express";
 import multer from "multer";
 import mammoth from "mammoth";
 import cors from "cors";
@@ -326,4 +326,190 @@ app.post("/generate-quiz-topic", async (req, res) => {
 
 app.listen(PORT, () => {
     console.log("✅ Server running on port " + PORT);
+});
+ */
+
+// at top of server.js (after other imports)
+import express from "express";
+import multer from "multer";
+import mammoth from "mammoth";
+import cors from "cors";
+import fs from "fs";
+import dotenv from "dotenv";
+import OpenAI from "openai";
+dotenv.config();
+
+const PORT = process.env.PORT || 5000;
+const app = express();
+const upload = multer({ dest: "uploads/" });
+app.use(
+    cors({
+        origin: "*",
+    })
+);
+app.use(express.json());
+
+const client = new OpenAI({
+    apiKey: process.env.GROQ_API_KEY,
+    baseURL: "https://api.groq.com/openai/v1",
+});
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// helper: create or get chat
+async function getOrCreateChat(userId, chatId, initialTitle) {
+    if (chatId) {
+        const { data: existing } = await supabase
+            .from("chats")
+            .select("*")
+            .eq("id", chatId)
+            .single();
+        if (existing) return existing;
+    }
+
+    // create a new chat
+    const { data } = await supabase
+        .from("chats")
+        .insert({ user_id: userId, title: initialTitle || "New Chat" })
+        .select()
+        .single();
+    return data;
+}
+
+// helper: insert message
+async function insertMessage({ chat_id, role, input_text, summary = null, flashcards = null, quiz = null }) {
+    const { data } = await supabase
+        .from("messages")
+        .insert({
+            chat_id,
+            role,
+            input_text,
+            summary,
+            flashcards,
+            quiz
+        })
+        .select()
+        .single();
+
+    return data;
+}
+
+// helper: fetch messages for a chat
+async function fetchMessages(chatId) {
+    const { data } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("chat_id", chatId)
+        .order("created_at", { ascending: true });
+    return data || [];
+}
+
+app.post("/message", async (req, res) => {
+    try {
+        // YOU MUST authenticate the user on backend - here we assume frontend sends userId (or use supabase jwt)
+        // Better: pass supabase auth token from frontend and verify; for now assume req.body.userId is present.
+        const { userId, chatId, text } = req.body;
+        if (!userId) return res.status(401).json({ error: "userId required" });
+        if (!text || !text.trim()) return res.status(400).json({ error: "text required" });
+
+        // 1) ensure chat exists
+        const chat = await getOrCreateChat(userId, chatId, text.slice(0, 50));
+
+        // 2) save user message
+        const userMessage = await insertMessage({
+            chat_id: chat.id,
+            role: "user",
+            input_text: text
+        });
+
+        // optionally: return an ephemeral loading response immediately (if you want streaming)
+        // For simplicity, we'll do synchronous AI calls and return the assistant result.
+
+        // 3) call your existing AI summarizer/flashcards/quiz functions
+        // reuse your existing logic: call the same client.responses.create with appropriate prompts.
+        // I'll make minimal helper functions that use the same llama-3.1-8b-instant model
+
+        // SUMMARY
+        const summaryResp = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `Summarize this text concisely:\n\n${text}`,
+        });
+        const summary = summaryResp.output_text || "";
+
+        // FLASHCARDS
+        const flashResp = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `
+        You are a study assistant.
+        Create 5 useful flashcards (question-answer pairs) from the following text.
+        ⚠️ Return ONLY a valid JSON array — no markdown, no explanations, no extra text.
+
+        Text:
+        ${text}
+      `
+        });
+        // parse flashcards safely (apply same cleaning you used)
+        let flashcards = [];
+        try {
+            let out = (flashResp.output_text || "").replace(/```json/i, "").replace(/```/g, "").trim();
+            const jsonMatch = out.match(/\[([\s\S]*)\]/);
+            if (jsonMatch) out = `[${jsonMatch[1]}]`;
+            flashcards = JSON.parse(out);
+        } catch (e) {
+            console.warn("Flashcards parse error", e);
+        }
+
+        // QUIZ
+        const quizResp = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `
+        Create 5 multiple-choice quiz questions from the following text.
+        Return ONLY a JSON array.
+
+        Text:
+        ${text}
+      `
+        });
+        let quiz = [];
+        try {
+            let out = (quizResp.output_text || "").replace(/```json/i, "").replace(/```/g, "").trim();
+            const jsonMatch = out.match(/\[([\s\S]*)\]/);
+            if (jsonMatch) out = `[${jsonMatch[1]}]`;
+            quiz = JSON.parse(out);
+        } catch (e) {
+            console.warn("Quiz parse error", e);
+        }
+
+        // 4) Save assistant message as ONE DB row
+        const assistantMessage = await insertMessage({
+            chat_id: chat.id,
+            role: "assistant",
+            input_text: null,
+            summary,
+            flashcards,
+            quiz
+        });
+
+        // 5) Update chat title if it was "New Chat" or empty
+        const newTitle = text.split(" ").slice(0, 7).join(" ");
+        await supabase
+            .from("chats")
+            .update({ title: newTitle, updated_at: new Date().toISOString() })
+            .eq("id", chat.id);
+
+        // 6) Return the assistant message + chat id
+        res.json({
+            chatId: chat.id,
+            assistant: assistantMessage,
+            userMessage,
+        });
+
+    } catch (err) {
+        console.error("❌ /message error:", err);
+        res.status(500).json({ error: "Failed to process message" });
+    }
 });
