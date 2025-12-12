@@ -123,24 +123,25 @@ app.post("/message", async (req, res) => {
         const quizResp = await client.responses.create({
             model: "llama-3.1-8b-instant",
             input: `
-                Create EXACTLY 5 multiple-choice questions from the following text.
+            Create EXACTLY 5 multiple-choice questions from the following text.
 
-                Return ONLY a JSON array.
+            Return ONLY a JSON array.
 
-                Each quiz object MUST have this EXACT shape:
-                {
-                "question": "string",
-                "options": ["A", "B", "C", "D"],
-                "correct": "A"
-                }
+            Each quiz object MUST have this EXACT shape:
+            {
+            "question": "string",
+            "options": ["option A", "option B", "option C", "option D"],
+            "answer": "option A"
+            }
 
-                Rules:
-                - "options" must be an array of 4 strings.
-                - "correct" must be one of: "A", "B", "C", "D".
-                - Do NOT use keys like A/B/C/D directly. Only use the "options" array.
+            Rules:
+            - "answer" must be the FULL correct option text.
+            - "options" must contain exactly 4 strings.
+            - Do NOT use keys A/B/C/D. Only use the "options" array.
+            - The "answer" MUST exactly match one option from the array.
 
-                Text:
-                ${text}
+            Text:
+            ${text}
             `
         });
         let quiz = [];
