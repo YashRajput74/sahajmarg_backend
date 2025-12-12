@@ -95,13 +95,20 @@ app.post("/message", async (req, res) => {
         const flashResp = await client.responses.create({
             model: "llama-3.1-8b-instant",
             input: `
-        You are a study assistant.
-        Create 5 useful flashcards (question-answer pairs) from the following text.
-        ⚠️ Return ONLY a valid JSON array — no markdown, no explanations, no extra text.
+                You are a study assistant.
 
-        Text:
-        ${text}
-      `
+                Generate EXACTLY 5 flashcards from the following text.
+                Return a *pure JSON array* with NO markdown and NO extra text.
+
+                Each flashcard MUST be an object with ONLY these keys:
+                {
+                "question": "string",
+                "answer": "string"
+                }
+
+                Text:
+                ${text}
+            `
         });
         let flashcards = [];
         try {
@@ -116,12 +123,25 @@ app.post("/message", async (req, res) => {
         const quizResp = await client.responses.create({
             model: "llama-3.1-8b-instant",
             input: `
-        Create 5 multiple-choice quiz questions from the following text.
-        Return ONLY a JSON array.
+                Create EXACTLY 5 multiple-choice questions from the following text.
 
-        Text:
-        ${text}
-      `
+                Return ONLY a JSON array.
+
+                Each quiz object MUST have this EXACT shape:
+                {
+                "question": "string",
+                "options": ["A", "B", "C", "D"],
+                "correct": "A"
+                }
+
+                Rules:
+                - "options" must be an array of 4 strings.
+                - "correct" must be one of: "A", "B", "C", "D".
+                - Do NOT use keys like A/B/C/D directly. Only use the "options" array.
+
+                Text:
+                ${text}
+            `
         });
         let quiz = [];
         try {
