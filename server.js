@@ -28,7 +28,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-async function getOrCreateChat(userId, chatId, initialTitle) {
+async function getOrCreateChat({ userId, sessionId, chatId, initialTitle }) {
     if (chatId) {
         const { data: existing } = await supabase
             .from("chats")
@@ -40,9 +40,14 @@ async function getOrCreateChat(userId, chatId, initialTitle) {
 
     const { data } = await supabase
         .from("chats")
-        .insert({ user_id: userId, title: initialTitle || "New Chat" })
+        .insert({
+            user_id: userId || null,
+            session_id: userId ? null : sessionId,
+            title: initialTitle || "New Chat",
+        })
         .select()
         .single();
+
     return data;
 }
 
@@ -74,11 +79,18 @@ async function fetchMessages(chatId) {
 
 app.post("/message", async (req, res) => {
     try {
-        const { userId, chatId, text } = req.body;
-        if (!userId) return res.status(401).json({ error: "userId required" });
+        const { userId, sessionId, chatId, text } = req.body;
+        if (!userId && !sessionId) {
+            return res.status(401).json({ error: "userId or sessionId required" });
+        }
         if (!text || !text.trim()) return res.status(400).json({ error: "text required" });
 
-        const chat = await getOrCreateChat(userId, chatId, text.slice(0, 50));
+        const chat = await getOrCreateChat({
+            userId,
+            sessionId,
+            chatId,
+            initialTitle: text.slice(0, 50),
+        });
 
         const userMessage = await insertMessage({
             chat_id: chat.id,
@@ -193,6 +205,24 @@ app.post("/message", async (req, res) => {
     }
 });
 
+app.post("/claim-chats", async (req, res) => {
+    const { userId, sessionId } = req.body;
+
+    if (!userId || !sessionId) {
+        return res.status(400).json({ error: "userId and sessionId required" });
+    }
+
+    await supabase
+        .from("chats")
+        .update({
+            user_id: userId,
+            session_id: null,
+        })
+        .eq("session_id", sessionId);
+
+    res.json({ success: true });
+});
+
 app.get("/chats/:userId", async (req, res) => {
     const { userId } = req.params;
 
@@ -215,6 +245,20 @@ app.get("/messages/:chatId", async (req, res) => {
         .select("*")
         .eq("chat_id", chatId)
         .order("created_at", { ascending: true });
+
+    if (error) return res.status(500).json({ error });
+
+    res.json(data);
+});
+
+app.get("/guest-chats/:sessionId", async (req, res) => {
+    const { sessionId } = req.params;
+
+    const { data, error } = await supabase
+        .from("chats")
+        .select("id, title, updated_at")
+        .eq("session_id", sessionId)
+        .order("updated_at", { ascending: false });
 
     if (error) return res.status(500).json({ error });
 
