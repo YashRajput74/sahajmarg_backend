@@ -28,7 +28,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-async function getOrCreateChat({ userId, sessionId, chatId, initialTitle }) {
+async function getOrCreateChat({ userId, chatId, initialTitle }) {
     if (chatId) {
         const { data: existing } = await supabase
             .from("chats")
@@ -41,8 +41,7 @@ async function getOrCreateChat({ userId, sessionId, chatId, initialTitle }) {
     const { data } = await supabase
         .from("chats")
         .insert({
-            user_id: userId || null,
-            session_id: userId ? null : sessionId,
+            user_id: userId,
             title: initialTitle || "New Chat",
         })
         .select()
@@ -79,15 +78,14 @@ async function fetchMessages(chatId) {
 
 app.post("/message", async (req, res) => {
     try {
-        const { userId, sessionId, chatId, text } = req.body;
-        if (!userId && !sessionId) {
-            return res.status(401).json({ error: "userId or sessionId required" });
+        const { userId, chatId, text } = req.body;
+        if (!userId) {
+            return res.status(401).json({ error: "userId required" });
         }
         if (!text || !text.trim()) return res.status(400).json({ error: "text required" });
 
         const chat = await getOrCreateChat({
             userId,
-            sessionId,
             chatId,
             initialTitle: text.slice(0, 50),
         });
@@ -205,20 +203,97 @@ app.post("/message", async (req, res) => {
     }
 });
 
-app.post("/claim-chats", async (req, res) => {
-    const { userId, sessionId } = req.body;
+app.post("/message/guest", async (req, res) => {
+    try {
+        const { text } = req.body;
+        if (!text || !text.trim()) {
+            return res.status(400).json({ error: "text required" });
+        }
 
-    if (!userId || !sessionId) {
-        return res.status(400).json({ error: "userId and sessionId required" });
+        const summaryResp = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `Summarize this text concisely:\n\n${text}`,
+        });
+
+        const summary = summaryResp.output_text || "";
+
+        const flashResp = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `
+You are a study assistant.
+Generate EXACTLY 5 flashcards.
+Return ONLY a JSON array.
+Text:
+${text}
+            `
+        });
+
+        let flashcards = [];
+        try {
+            let out = (flashResp.output_text || "").replace(/```json/i, "").replace(/```/g, "").trim();
+            const jsonMatch = out.match(/\[([\s\S]*)\]/);
+            if (jsonMatch) out = `[${jsonMatch[1]}]`;
+            flashcards = JSON.parse(out);
+        } catch { }
+
+        const quizResp = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `
+Create EXACTLY 5 MCQs.
+Return ONLY JSON.
+Text:
+${text}
+            `
+        });
+
+        let quiz = [];
+        try {
+            let out = (quizResp.output_text || "").replace(/```json/i, "").replace(/```/g, "").trim();
+            const jsonMatch = out.match(/\[([\s\S]*)\]/);
+            if (jsonMatch) out = `[${jsonMatch[1]}]`;
+            quiz = JSON.parse(out);
+        } catch { }
+
+        res.json({
+            summary,
+            flashcards,
+            quiz
+        });
+
+    } catch (err) {
+        console.error("❌ guest message error:", err);
+        res.status(500).json({ error: "Guest message failed" });
+    }
+});
+
+app.post("/claim-guest-chats", async (req, res) => {
+    const { userId, guestChats } = req.body;
+
+    if (!userId || !Array.isArray(guestChats)) {
+        return res.status(400).json({ error: "invalid payload" });
     }
 
-    await supabase
-        .from("chats")
-        .update({
-            user_id: userId,
-            session_id: null,
-        })
-        .eq("session_id", sessionId);
+    for (const chat of guestChats) {
+        const { data: newChat } = await supabase
+            .from("chats")
+            .insert({
+                user_id: userId,
+                title: chat.title || "New Chat"
+            })
+            .select()
+            .single();
+
+        for (const msg of chat.messages) {
+            await supabase.from("messages").insert({
+                chat_id: newChat.id,
+                role: msg.role,
+                input_text: msg.text ?? null,
+                summary: msg.summary ?? null,
+                flashcards: msg.flashcards ?? null,
+                quiz: msg.quiz ?? null
+            });
+        }
+    }
 
     res.json({ success: true });
 });
@@ -245,20 +320,6 @@ app.get("/messages/:chatId", async (req, res) => {
         .select("*")
         .eq("chat_id", chatId)
         .order("created_at", { ascending: true });
-
-    if (error) return res.status(500).json({ error });
-
-    res.json(data);
-});
-
-app.get("/guest-chats/:sessionId", async (req, res) => {
-    const { sessionId } = req.params;
-
-    const { data, error } = await supabase
-        .from("chats")
-        .select("id, title, updated_at")
-        .eq("session_id", sessionId)
-        .order("updated_at", { ascending: false });
 
     if (error) return res.status(500).json({ error });
 
