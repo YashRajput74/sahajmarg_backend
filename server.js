@@ -167,7 +167,7 @@ app.post("/message", async (req, res) => {
         const assistantMessage = await insertMessage({
             chat_id: chat.id,
             role: "assistant",
-            input_text: null,
+            input_text: "Generated quiz and flashcards",
             summary,
             flashcards,
             quiz
@@ -307,7 +307,10 @@ app.post("/claim-guest-chats", async (req, res) => {
             await supabase.from("messages").insert({
                 chat_id: newChat.id,
                 role: msg.role,
-                input_text: msg.text ?? null,
+                input_text:
+                    msg.input_text ??
+                    msg.text ??
+                    "Generated study materials",
                 summary: msg.summary ?? null,
                 flashcards: msg.flashcards ?? null,
                 quiz: msg.quiz ?? null
