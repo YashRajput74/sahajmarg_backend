@@ -278,7 +278,13 @@ app.post("/message/guest", async (req, res) => {
             console.warn("Quiz parse error", e);
         }
 
-        res.json({ summary, flashcards, quiz });
+        res.json({
+            assistant: {
+                summary,
+                flashcards,
+                quiz
+            }
+        });
 
     } catch (err) {
         console.error("❌ guest message error:", err);
