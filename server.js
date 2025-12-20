@@ -67,6 +67,21 @@ async function insertMessage({ chat_id, role, input_text, summary = null, flashc
     return data;
 }
 
+async function generateChatTitle(text) {
+    const resp = await client.responses.create({
+        model: "llama-3.1-8b-instant",
+        input: `Generate a short, clear 4 to 6 word title for this topic:\n${text}`
+    });
+
+    return (
+        resp.output_text
+            ?.replace(/["\n]/g, "")
+            .trim()
+            .slice(0, 60)
+        || "New Chat"
+    );
+}
+
 async function fetchMessages(chatId) {
     const { data } = await supabase
         .from("messages")
@@ -84,10 +99,12 @@ app.post("/message", async (req, res) => {
         }
         if (!text || !text.trim()) return res.status(400).json({ error: "text required" });
 
+        const title = chatId ? undefined : await generateChatTitle(text);
+
         const chat = await getOrCreateChat({
             userId,
             chatId,
-            initialTitle: text.slice(0, 50),
+            initialTitle: title,
         });
 
         const userMessage = await insertMessage({
