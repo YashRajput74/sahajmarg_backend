@@ -190,16 +190,15 @@ app.post("/message", async (req, res) => {
             quiz
         });
 
-        if (!chatId) {
-            const newTitle = text.length > 50 ? text.slice(0, 50) + "..." : text;
+        if (chatId) {
             await supabase
                 .from("chats")
                 .update({
-                    title: newTitle,
                     updated_at: new Date().toISOString()
                 })
                 .eq("id", chat.id);
-        } else {
+        }
+        else {
             await supabase
                 .from("chats")
                 .update({
@@ -210,6 +209,7 @@ app.post("/message", async (req, res) => {
 
         res.json({
             chatId: chat.id,
+            title: chat.title,
             assistant: assistantMessage,
             userMessage,
         });
