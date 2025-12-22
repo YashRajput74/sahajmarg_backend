@@ -5,6 +5,8 @@ import cors from "cors";
 import fs from "fs";
 import dotenv from "dotenv";
 import OpenAI from "openai";
+import crypto from "crypto";
+
 dotenv.config();
 
 const PORT = process.env.PORT || 5000;
@@ -143,6 +145,11 @@ app.post("/message", async (req, res) => {
             const jsonMatch = out.match(/\[([\s\S]*)\]/);
             if (jsonMatch) out = `[${jsonMatch[1]}]`;
             flashcards = JSON.parse(out);
+            flashcards = flashcards.map(card => ({
+                id: crypto.randomUUID(),
+                question: card.question,
+                answer: card.answer
+            }));
         } catch (e) {
             console.warn("Flashcards parse error", e);
         }
@@ -257,6 +264,11 @@ app.post("/message/guest", async (req, res) => {
             const jsonMatch = out.match(/\[([\s\S]*)\]/);
             if (jsonMatch) out = `[${jsonMatch[1]}]`;
             flashcards = JSON.parse(out);
+            flashcards = flashcards.map(card => ({
+                id: crypto.randomUUID(),
+                question: card.question,
+                answer: card.answer
+            }));
         } catch (e) {
             console.warn("Flashcards parse error", e);
         }
@@ -342,6 +354,79 @@ app.post("/claim-guest-chats", async (req, res) => {
     }
 
     res.json({ success: true });
+});
+
+app.post("/flashcards/save", async (req, res) => {
+    try {
+        const { userId, chatId, messageId, cardId } = req.body;
+
+        if (!userId || !messageId || !cardId) {
+            return res.status(400).json({ error: "Missing fields" });
+        }
+
+        const { error } = await supabase
+            .from("saved_flashcard_cards")
+            .insert({
+                user_id: userId,
+                chat_id: chatId,
+                message_id: messageId,
+                card_id: cardId
+            });
+
+        if (error) {
+            if (error.code === "23505") {
+                return res.status(409).json({ error: "Card already saved" });
+            }
+            throw error;
+        }
+
+        res.json({ success: true });
+
+    } catch (err) {
+        console.error("❌ Save flashcard error:", err);
+        res.status(500).json({ error: "Failed to save flashcard" });
+    }
+});
+
+app.get("/flashcards/saved/:userId", async (req, res) => {
+    const { userId } = req.params;
+
+    const { data, error } = await supabase
+        .from("saved_flashcard_cards")
+        .select(`
+            card_id,
+            chat_id,
+            message_id,
+            created_at,
+            messages (
+                flashcards,
+                chat_id
+            ),
+            chats (
+                title
+            )
+        `)
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        console.error(error);
+        return res.status(500).json({ error: "Failed to fetch saved cards" });
+    }
+
+    const cards = data.flatMap(row => {
+        const cards = row.messages?.flashcards || [];
+        const card = cards.find(c => c.id === row.card_id);
+        if (!card) return [];
+        return [{
+            ...card,
+            chatId: row.chat_id,
+            chatTitle: row.chats?.title,
+            savedAt: row.created_at
+        }];
+    });
+
+    res.json(cards);
 });
 
 app.get("/chats/:userId", async (req, res) => {
