@@ -307,7 +307,10 @@ app.post("/message/guest", async (req, res) => {
             console.warn("Quiz parse error", e);
         }
 
+        const title = await generateChatTitle(text);
+
         res.json({
+            title,
             assistant: {
                 summary,
                 flashcards,
