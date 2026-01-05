@@ -468,6 +468,56 @@ app.delete("/chat/:chatId", async (req, res) => {
     res.json({ success: true });
 });
 
+app.delete("/flashcards/saved", async (req, res) => {
+    try {
+        const { userId, cardId, messageId } = req.body;
+
+        if (!userId || !cardId || !messageId) {
+            return res.status(400).json({ error: "Missing fields" });
+        }
+
+        const { error } = await supabase
+            .from("saved_flashcard_cards")
+            .delete()
+            .eq("user_id", userId)
+            .eq("card_id", cardId)
+            .eq("message_id", messageId);
+
+        if (error) throw error;
+
+        res.json({ success: true });
+
+    } catch (err) {
+        console.error("❌ Delete flashcard error:", err);
+        res.status(500).json({ error: "Failed to delete flashcard" });
+    }
+});
+
+app.delete("/flashcards/saved/chat/:chatId", async (req, res) => {
+    try {
+        const { chatId } = req.params;
+        const { userId } = req.body;
+
+        if (!userId || !chatId) {
+            return res.status(400).json({ error: "Missing fields" });
+        }
+
+        const { error } = await supabase
+            .from("saved_flashcard_cards")
+            .delete()
+            .eq("user_id", userId)
+            .eq("chat_id", chatId);
+
+        if (error) throw error;
+
+        res.json({ success: true });
+
+    } catch (err) {
+        console.error("❌ Delete chat flashcards error:", err);
+        res.status(500).json({ error: "Failed to delete chat flashcards" });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
