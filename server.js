@@ -11,7 +11,11 @@ dotenv.config();
 
 const PORT = process.env.PORT || 5000;
 const app = express();
-const upload = multer({ dest: "uploads/" });
+const upload = multer({
+    dest: "uploads/",
+    limits: { fileSize: 5 * 1024 * 1024 }
+});
+
 app.use(
     cors({
         origin: "*",
@@ -50,6 +54,36 @@ async function getOrCreateChat({ userId, chatId, initialTitle }) {
         .single();
 
     return data;
+}
+
+async function extractTextFromRequest(req) {
+    if (req.file) {
+        const buffer = fs.readFileSync(req.file.path);
+        const { value } = await mammoth.extractRawText({ buffer });
+
+        fs.unlinkSync(req.file.path);
+
+        return {
+            text: value.trim(),
+            displayText: `📄 ${req.file.originalname}`
+        };
+    }
+
+    if (req.body.summary && req.body.summary.trim()) {
+        return {
+            text: req.body.summary.trim(),
+            displayText: "Summary"
+        };
+    }
+
+    if (req.body.text && req.body.text.trim()) {
+        return {
+            text: req.body.text.trim(),
+            displayText: req.body.text.trim()
+        };
+    }
+
+    throw new Error("No content provided");
 }
 
 async function insertMessage({ chat_id, role, input_text, summary = null, flashcards = null, quiz = null }) {
@@ -93,13 +127,21 @@ async function fetchMessages(chatId) {
     return data || [];
 }
 
-app.post("/message", async (req, res) => {
+app.post("/message", upload.single("file"), async (req, res) => {
     try {
-        const { userId, chatId, text } = req.body;
+        const { userId, chatId } = req.body;
         if (!userId) {
             return res.status(401).json({ error: "userId required" });
         }
-        if (!text || !text.trim()) return res.status(400).json({ error: "text required" });
+
+        let extracted;
+        try {
+            extracted = await extractTextFromRequest(req);
+        } catch {
+            return res.status(400).json({ error: "No content provided" });
+        }
+
+        const { text, displayText } = extracted;
 
         const title = chatId ? undefined : await generateChatTitle(text);
 
@@ -112,7 +154,7 @@ app.post("/message", async (req, res) => {
         const userMessage = await insertMessage({
             chat_id: chat.id,
             role: "user",
-            input_text: text
+            input_text: displayText
         });
 
         const summaryResp = await client.responses.create({
