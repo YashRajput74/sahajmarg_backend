@@ -21,7 +21,14 @@ app.use(
         origin: "*",
     })
 );
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
+app.use((req, res, next) => {
+    if (req.is("multipart/form-data")) {
+        return next();
+    }
+    express.json()(req, res, next);
+});
+
 
 const client = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
@@ -144,6 +151,8 @@ app.post("/message", upload.single("file"), async (req, res) => {
         const { text, displayText } = extracted;
 
         const title = chatId ? undefined : await generateChatTitle(text);
+        console.log("FILE:", req.file);
+        console.log("BODY:", req.body);
 
         const chat = await getOrCreateChat({
             userId,
