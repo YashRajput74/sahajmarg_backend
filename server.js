@@ -6,7 +6,7 @@ import fs from "fs";
 import dotenv from "dotenv";
 import OpenAI from "openai";
 import crypto from "crypto";
-import pdfParse from "pdf-parse";
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import path from "path";
 
 dotenv.config();
