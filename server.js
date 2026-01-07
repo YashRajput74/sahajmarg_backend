@@ -6,8 +6,8 @@ import fs from "fs";
 import dotenv from "dotenv";
 import OpenAI from "openai";
 import crypto from "crypto";
-import pdfParse from "pdf-parse/lib/pdf-parse.js";
 import path from "path";
+import { createRequire } from "module";
 
 dotenv.config();
 
@@ -17,6 +17,8 @@ const upload = multer({
     dest: "uploads/",
     limits: { fileSize: 5 * 1024 * 1024 }
 });
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse");
 
 app.use(cors({ origin: "*" }));
 
