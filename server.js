@@ -6,6 +6,8 @@ import fs from "fs";
 import dotenv from "dotenv";
 import OpenAI from "openai";
 import crypto from "crypto";
+import pdfParse from "pdf-parse";
+import path from "path";
 
 dotenv.config();
 
@@ -16,19 +18,9 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }
 });
 
-app.use(
-    cors({
-        origin: "*",
-    })
-);
-app.use(express.json({ limit: "10mb" }));
-app.use((req, res, next) => {
-    if (req.is("multipart/form-data")) {
-        return next();
-    }
-    express.json()(req, res, next);
-});
+app.use(cors({ origin: "*" }));
 
+app.use(express.json({ limit: "10mb" }));
 
 const client = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
@@ -66,24 +58,32 @@ async function getOrCreateChat({ userId, chatId, initialTitle }) {
 async function extractTextFromRequest(req) {
     if (req.file) {
         const buffer = fs.readFileSync(req.file.path);
-        const { value } = await mammoth.extractRawText({ buffer });
+        const ext = path.extname(req.file.originalname).toLowerCase();
+
+        let text = "";
+
+        if (ext === ".docx") {
+            const result = await mammoth.extractRawText({ buffer });
+            text = result.value;
+        }
+        else if (ext === ".pdf") {
+            const result = await pdfParse(buffer);
+            text = result.text;
+        }
+        else {
+            fs.unlinkSync(req.file.path);
+            throw new Error("Unsupported file type");
+        }
 
         fs.unlinkSync(req.file.path);
 
         return {
-            text: value.trim(),
+            text: text.trim(),
             displayText: `📄 ${req.file.originalname}`
         };
     }
 
-    if (req.body.summary && req.body.summary.trim()) {
-        return {
-            text: req.body.summary.trim(),
-            displayText: "Summary"
-        };
-    }
-
-    if (req.body.text && req.body.text.trim()) {
+    if (req.body.text?.trim()) {
         return {
             text: req.body.text.trim(),
             displayText: req.body.text.trim()
