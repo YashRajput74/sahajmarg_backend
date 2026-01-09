@@ -57,6 +57,34 @@ async function getOrCreateChat({ userId, chatId, initialTitle }) {
     return data;
 }
 
+function chunkText(text, size = 1500) {
+    const chunks = [];
+    for (let i = 0; i < text.length; i += size) {
+        chunks.push(text.slice(i, i + size));
+    }
+    return chunks;
+}
+
+async function summarizeLargeText(text) {
+    const chunks = chunkText(text).slice(0, 8);
+    const summaries = [];
+
+    for (const chunk of chunks) {
+        const resp = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `Summarize this part concisely:\n\n${chunk}`
+        });
+        summaries.push(resp.output_text || "");
+    }
+
+    const finalResp = await client.responses.create({
+        model: "llama-3.1-8b-instant",
+        input: `Combine these summaries into one concise summary:\n\n${summaries.join("\n")}`
+    });
+
+    return finalResp.output_text || "";
+}
+
 async function extractTextFromRequest(req) {
     if (req.file) {
         const buffer = fs.readFileSync(req.file.path);
@@ -161,7 +189,15 @@ app.post("/message", upload.single("file"), async (req, res) => {
 
         const { text, displayText } = extracted;
 
-        const title = chatId ? undefined : await generateChatTitle(text);
+        const summary = text.length > 2000
+            ? await summarizeLargeText(text)
+            : (await client.responses.create({
+                model: "llama-3.1-8b-instant",
+                input: `Summarize this text concisely:\n\n${text}`,
+            })).output_text || "";
+
+        const title = chatId ? undefined : await generateChatTitle(summary);
+
         console.log("FILE:", req.file);
         console.log("BODY:", req.body);
 
@@ -176,12 +212,6 @@ app.post("/message", upload.single("file"), async (req, res) => {
             role: "user",
             input_text: displayText
         });
-
-        const summaryResp = await client.responses.create({
-            model: "llama-3.1-8b-instant",
-            input: `Summarize this text concisely:\n\n${text}`,
-        });
-        const summary = summaryResp.output_text || "";
 
         const flashResp = await client.responses.create({
             model: "llama-3.1-8b-instant",
@@ -198,7 +228,7 @@ app.post("/message", upload.single("file"), async (req, res) => {
                 }
 
                 Text:
-                ${text}
+                ${summary}
             `
         });
         let flashcards = [];
@@ -237,7 +267,7 @@ app.post("/message", upload.single("file"), async (req, res) => {
             - The "answer" MUST exactly match one option from the array.
 
             Text:
-            ${text}
+            ${summary}
             `
         });
         let quiz = [];
