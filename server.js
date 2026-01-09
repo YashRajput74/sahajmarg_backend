@@ -70,6 +70,8 @@ async function extractTextFromRequest(req) {
         }
         else if (ext === ".pdf") {
             const result = await pdfParse(buffer);
+            console.log("📄 PDF PARSED TEXT (first 1000 chars):");
+            console.log(result.text.slice(0, 1000));
             text = result.text || "";
         }
 
