@@ -98,9 +98,11 @@ async function extractTextFromRequest(req) {
         }
         else if (ext === ".pdf") {
             const result = await pdfParse(buffer);
-            console.log("📄 PDF PARSED TEXT (first 1000 chars):");
-            console.log(result.text.slice(0, 1000));
-            text = result.text || "";
+            text = (result.text || "").trim();
+
+            if (!text || text.length < 30) {
+                throw new Error("PDF_NO_TEXT");
+            }
         }
 
         fs.unlinkSync(req.file.path);
@@ -183,7 +185,13 @@ app.post("/message", upload.single("file"), async (req, res) => {
         let extracted;
         try {
             extracted = await extractTextFromRequest(req);
-        } catch {
+        } catch (err) {
+            if (err.message === "PDF_NO_TEXT") {
+                return res.status(400).json({
+                    error: "This PDF appears to be image-only or has no readable text. Please upload a text-based PDF or DOCX file."
+                });
+            }
+
             return res.status(400).json({ error: "No content provided" });
         }
 
