@@ -66,18 +66,25 @@ async function extractTextFromRequest(req) {
 
         if (ext === ".docx") {
             const result = await mammoth.extractRawText({ buffer });
-            text = result.value;
+            text = result.value || "";
         }
         else if (ext === ".pdf") {
             const result = await pdfParse(buffer);
-            text = result.text;
-        }
-        else {
-            fs.unlinkSync(req.file.path);
-            throw new Error("Unsupported file type");
+            text = result.text || "";
         }
 
         fs.unlinkSync(req.file.path);
+
+        if (!text.trim() && req.body.text?.trim()) {
+            return {
+                text: req.body.text.trim(),
+                displayText: `📄 ${req.file.originalname}`
+            };
+        }
+
+        if (!text.trim()) {
+            throw new Error("File contains no readable text");
+        }
 
         return {
             text: text.trim(),
