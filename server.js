@@ -1,39 +1,42 @@
-import express from "express";
-import multer from "multer";
-import mammoth from "mammoth";
-import cors from "cors";
-import fs from "fs";
-import dotenv from "dotenv";
-import OpenAI from "openai";
+/* import express from "express";// done
+import multer from "multer";//done
+import mammoth from "mammoth";//done
+import cors from "cors";//done
+import fs from "fs";//done
+import dotenv from "dotenv";//done
+import OpenAI from "openai";//done
 import crypto from "crypto";
-import path from "path";
-import { createRequire } from "module";
+import path from "path";//done
+import { createRequire } from "module";//done
 
-dotenv.config();
+dotenv.config();//done
 
 const PORT = process.env.PORT || 5000;
-const app = express();
+const app = express();//done
 const upload = multer({
     dest: "uploads/",
     limits: { fileSize: 5 * 1024 * 1024 }
 });
-const require = createRequire(import.meta.url);
-const pdfParse = require("pdf-parse");
+//done
 
-app.use(cors({ origin: "*" }));
+const require = createRequire(import.meta.url);//done
+const pdfParse = require("pdf-parse");//done
 
-app.use(express.json({ limit: "10mb" }));
+app.use(cors({ origin: "*" }));//done
+
+app.use(express.json({ limit: "10mb" }));//done
 
 const client = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
     baseURL: "https://api.groq.com/openai/v1",
 });
-import { createClient } from "@supabase/supabase-js";
+//done
+import { createClient } from "@supabase/supabase-js";//done
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL;//done
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;//done
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);//done
 
 async function getOrCreateChat({ userId, chatId, initialTitle }) {
     if (chatId) {
@@ -56,6 +59,7 @@ async function getOrCreateChat({ userId, chatId, initialTitle }) {
 
     return data;
 }
+//done
 
 function chunkText(text, size = 1500) {
     const chunks = [];
@@ -64,6 +68,7 @@ function chunkText(text, size = 1500) {
     }
     return chunks;
 }
+//done
 
 async function summarizeLargeText(text) {
     const chunks = chunkText(text).slice(0, 8);
@@ -84,6 +89,7 @@ async function summarizeLargeText(text) {
 
     return finalResp.output_text || "";
 }
+//done
 
 async function extractTextFromRequest(req) {
     if (req.file) {
@@ -133,6 +139,7 @@ async function extractTextFromRequest(req) {
 
     throw new Error("No content provided");
 }
+//done
 
 async function insertMessage({ chat_id, role, input_text, summary = null, flashcards = null, quiz = null }) {
     const { data } = await supabase
@@ -150,6 +157,7 @@ async function insertMessage({ chat_id, role, input_text, summary = null, flashc
 
     return data;
 }
+//done
 
 async function generateChatTitle(text) {
     const resp = await client.responses.create({
@@ -165,6 +173,7 @@ async function generateChatTitle(text) {
         || "New Chat"
     );
 }
+//done
 
 async function fetchMessages(chatId) {
     const { data } = await supabase
@@ -173,7 +182,7 @@ async function fetchMessages(chatId) {
         .eq("chat_id", chatId)
         .order("created_at", { ascending: true });
     return data || [];
-}
+}//done
 
 app.post("/message", upload.single("file"), async (req, res) => {
     try {
@@ -326,6 +335,7 @@ app.post("/message", upload.single("file"), async (req, res) => {
         res.status(500).json({ error: "Failed to process message" });
     }
 });
+//done
 
 app.post("/message/guest", async (req, res) => {
     try {
@@ -620,4 +630,30 @@ app.delete("/flashcards/saved/chat/:chatId", async (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+});
+//done
+*/
+
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+
+import chatRoutes from "./routes/chat.routes.js";
+/* import flashcardRoutes from "./routes/flashcard.routes.js";
+import studyRoutes from "./routes/study.routes.js"; */
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+app.use(cors({ origin: "*" }));
+app.use(express.json({ limit: "10mb" }));
+
+app.use("/", chatRoutes);
+/* app.use("/flashcards", flashcardRoutes);
+app.use("/study", studyRoutes); */
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
