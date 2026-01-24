@@ -57,6 +57,21 @@ async function getOrCreateChat({ userId, chatId, initialTitle }) {
     return data;
 }
 
+function safeParseJSON(text) {
+    if (!text) return null;
+
+    let out = text
+        .replace(/```json/i, "")
+        .replace(/```/g, "")
+        .trim();
+
+    try {
+        return JSON.parse(out);
+    } catch {
+        return null;
+    }
+}
+
 function chunkText(text, size = 1500) {
     const chunks = [];
     for (let i = 0; i < text.length; i += size) {
@@ -488,6 +503,190 @@ app.post("/flashcards/save", async (req, res) => {
     } catch (err) {
         console.error("❌ Save flashcard error:", err);
         res.status(500).json({ error: "Failed to save flashcard" });
+    }
+});
+
+app.post("/flowchart/nodes", async (req, res) => {
+    try {
+        const { topic, level = "beginner" } = req.body;
+
+        if (!topic?.trim()) {
+            return res.status(400).json({ error: "topic required" });
+        }
+
+        const resp = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `
+You are a JSON generator.
+
+Generate a flowchart structure for the topic:
+"${topic}"
+
+Return ONLY valid JSON.
+NO markdown. NO explanations.
+
+Schema:
+{
+  "root": {
+    "id": "string",
+    "title": "string",
+    "label": "Root Concept"
+  },
+  "columns": [
+    {
+      "id": "string",
+      "title": "string",
+      "subtitle": "string",
+      "nodes": [
+        {
+          "id": "string",
+          "label": "string",
+          "subtitle": "string"
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Max 4 columns
+- Max 3 nodes per column
+- Labels: 1–3 words
+- Subtitles: max 6 words
+- IDs must be lowercase, short, stable, kebab-case or abbreviations
+- Level: ${level}
+
+If you cannot comply, return:
+{ "error": "schema_violation" }
+            `
+        });
+
+        const json = safeParseJSON(resp.output_text);
+
+        if (!json || json.error) {
+            return res.status(422).json({ error: "Invalid AI output" });
+        }
+
+        res.json(json);
+
+    } catch (err) {
+        console.error("❌ /flowchart/nodes error:", err);
+        res.status(500).json({ error: "Failed to generate nodes" });
+    }
+});
+
+app.post("/flowchart/tooltips", async (req, res) => {
+    try {
+        const { topic, nodeIds } = req.body;
+
+        if (!topic || !Array.isArray(nodeIds) || nodeIds.length === 0) {
+            return res.status(400).json({ error: "invalid payload" });
+        }
+
+        const resp = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `
+You are a JSON generator.
+
+Generate tooltips for the topic:
+"${topic}"
+
+ONLY for these node IDs:
+${JSON.stringify(nodeIds)}
+
+Return ONLY valid JSON.
+
+Schema:
+{
+  "nodeId": {
+    "heading": "string",
+    "data": "string"
+  }
+}
+
+Rules:
+- One entry per nodeId
+- Short and clear
+- No extra keys
+- No missing IDs
+            `
+        });
+
+        const json = safeParseJSON(resp.output_text);
+
+        if (!json) {
+            return res.status(422).json({ error: "Invalid AI output" });
+        }
+
+        res.json(json);
+
+    } catch (err) {
+        console.error("❌ /flowchart/tooltips error:", err);
+        res.status(500).json({ error: "Failed to generate tooltips" });
+    }
+});
+
+app.post("/flowchart/overlay", async (req, res) => {
+    try {
+        const { topic, nodeId, level = "beginner" } = req.body;
+
+        if (!topic || !nodeId) {
+            return res.status(400).json({ error: "invalid payload" });
+        }
+
+        const resp = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `
+You are a JSON generator.
+
+Generate overlay content for:
+Topic: "${topic}"
+Node: "${nodeId}"
+Level: ${level}
+
+Return ONLY valid JSON.
+
+Schema:
+{
+  "meta": {
+    "title": "string",
+    "badge": "string",
+    "icon": "string",
+    "topic": "string"
+  },
+  "sections": [
+    {
+      "type": "text",
+      "heading": "string",
+      "content": "string"
+    },
+    {
+      "type": "notes",
+      "heading": "My Reflections",
+      "placeholder": "string"
+    }
+  ]
+}
+
+Rules:
+- 2 text sections max
+- 1 notes section at end
+- Clear, student-friendly language
+- No markdown
+            `
+        });
+
+        const json = safeParseJSON(resp.output_text);
+
+        if (!json) {
+            return res.status(422).json({ error: "Invalid AI output" });
+        }
+
+        res.json(json);
+
+    } catch (err) {
+        console.error("❌ /flowchart/overlay error:", err);
+        res.status(500).json({ error: "Failed to generate overlay" });
     }
 });
 
