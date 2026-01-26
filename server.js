@@ -612,25 +612,45 @@ Schema:
   }
 }
 
+IMPORTANT:
+- The response MUST be a JSON OBJECT, not an array
+- Do NOT use numeric keys
+- Do NOT return a list
+- Keys MUST be the provided node.id values
+- Example of INVALID output:
+  [
+    { "heading": "...", "data": "..." }
+  ]
+
 Rules:
-- Use the node's label and subtitle to determine meaning
+- Response MUST be a JSON OBJECT (not an array)
 - Keys MUST exactly match the provided node.id values
+- Do NOT use numeric keys like "0", "1", "2"
 - One tooltip per node
 - Short, beginner-friendly explanations
-- Do NOT invent new concepts
 - No extra or missing keys
             `
         });
 
-        const json = safeParseJSON(resp.output_text);
+        let parsed = safeParseJSON(resp.output_text);
 
-        if (!json) {
+        if (!parsed) {
             return res.status(422).json({ error: "Invalid AI output" });
         }
 
+        if (Array.isArray(parsed)) {
+            const fixed = {};
+            nodes.forEach((node, index) => {
+                if (parsed[index]) {
+                    fixed[node.id] = parsed[index];
+                }
+            });
+            parsed = fixed;
+        }
+
         const ids = nodes.map(n => n.id);
-        const missing = ids.filter(id => !json[id]);
-        const extra = Object.keys(json).filter(id => !ids.includes(id));
+        const missing = ids.filter(id => !parsed[id]);
+        const extra = Object.keys(parsed).filter(id => !ids.includes(id));
 
         if (missing.length || extra.length) {
             return res.status(422).json({
@@ -640,7 +660,7 @@ Rules:
             });
         }
 
-        res.json(json);
+        res.json(parsed);
 
     } catch (err) {
         console.error("❌ /flowchart/tooltips error:", err);
