@@ -577,9 +577,14 @@ If you cannot comply, return:
 
 app.post("/flowchart/tooltips", async (req, res) => {
     try {
-        const { topic, nodeIds } = req.body;
+        const { topic, nodes } = req.body;
 
-        if (!topic || !Array.isArray(nodeIds) || nodeIds.length === 0) {
+        if (
+            !topic ||
+            !Array.isArray(nodes) ||
+            nodes.length === 0 ||
+            nodes.some(n => !n.id || !n.label)
+        ) {
             return res.status(400).json({ error: "invalid payload" });
         }
 
@@ -591,10 +596,13 @@ You are a JSON generator.
 Generate tooltips for the topic:
 "${topic}"
 
-ONLY for these node IDs:
-${JSON.stringify(nodeIds)}
+Each tooltip corresponds to a node.
+
+Nodes:
+${JSON.stringify(nodes, null, 2)}
 
 Return ONLY valid JSON.
+NO markdown. NO explanations.
 
 Schema:
 {
@@ -605,10 +613,12 @@ Schema:
 }
 
 Rules:
-- One entry per nodeId
-- Short and clear
-- No extra keys
-- No missing IDs
+- Use the node's label and subtitle to determine meaning
+- Keys MUST exactly match the provided node.id values
+- One tooltip per node
+- Short, beginner-friendly explanations
+- Do NOT invent new concepts
+- No extra or missing keys
             `
         });
 
@@ -616,6 +626,18 @@ Rules:
 
         if (!json) {
             return res.status(422).json({ error: "Invalid AI output" });
+        }
+
+        const ids = nodes.map(n => n.id);
+        const missing = ids.filter(id => !json[id]);
+        const extra = Object.keys(json).filter(id => !ids.includes(id));
+
+        if (missing.length || extra.length) {
+            return res.status(422).json({
+                error: "tooltip_id_mismatch",
+                missing,
+                extra
+            });
         }
 
         res.json(json);
@@ -628,9 +650,14 @@ Rules:
 
 app.post("/flowchart/overlay", async (req, res) => {
     try {
-        const { topic, nodeId, level = "beginner" } = req.body;
+        const { topic, node, level = "beginner" } = req.body;
 
-        if (!topic || !nodeId) {
+        if (
+            !topic ||
+            !node ||
+            !node.id ||
+            !node.label
+        ) {
             return res.status(400).json({ error: "invalid payload" });
         }
 
@@ -639,12 +666,19 @@ app.post("/flowchart/overlay", async (req, res) => {
             input: `
 You are a JSON generator.
 
-Generate overlay content for:
-Topic: "${topic}"
-Node: "${nodeId}"
+Generate detailed overlay content.
+
+Topic:
+"${topic}"
+
+Node:
+Label: "${node.label}"
+Subtitle: "${node.subtitle || ""}"
+
 Level: ${level}
 
 Return ONLY valid JSON.
+NO markdown. NO explanations.
 
 Schema:
 {
@@ -669,10 +703,11 @@ Schema:
 }
 
 Rules:
-- 2 text sections max
-- 1 notes section at end
-- Clear, student-friendly language
-- No markdown
+- Max 2 text sections
+- 1 notes section at the end
+- Student-friendly language
+- Focus ONLY on the given node
+- Do NOT introduce new topics
             `
         });
 
