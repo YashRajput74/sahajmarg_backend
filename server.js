@@ -723,7 +723,6 @@ Schema:
   "meta": {
     "title": "string",
     "badge": "string",
-    "icon": "string",
     "topic": "string"
   },
   "sections": [
