@@ -548,13 +548,23 @@ Schema:
   ]
 }
 
+This is a visual map, NOT a lesson.
+
+Return ONLY valid JSON.
+NO markdown. NO explanations.
+
 Rules:
-- Max 4 columns
-- Max 3 nodes per column
-- Labels: 1–3 words
-- Subtitles: max 6 words
-- IDs must be lowercase, short, stable, kebab-case or abbreviations
+- Labels: short concept names (1–3 words)
+- Subtitles: scope/category hints, NOT explanations
+- Subtitles must NOT define the label
+- IDs must be stable, lowercase
 - Level: ${level}
+Subtitles:
+- Describe the category or scope
+- NOT definitions
+- NOT explanations
+- 3–6 words
+- No verbs like "explains", "handles", "manages"
 
 If you cannot comply, return:
 { "error": "schema_violation" }
@@ -598,6 +608,11 @@ Generate tooltips for the topic:
 
 Each tooltip corresponds to a node.
 
+Purpose of tooltip:
+- Add context
+- NOT definitions
+- NOT restating subtitle
+
 Nodes:
 ${JSON.stringify(nodes, null, 2)}
 
@@ -629,6 +644,9 @@ Rules:
 - One tooltip per node
 - Short, beginner-friendly explanations
 - No extra or missing keys
+- Do NOT repeat label or subtitle wording
+- Explain usage, importance, or intuition
+- One short sentence per tooltip
             `
         });
 
@@ -722,12 +740,20 @@ Schema:
   ]
 }
 
-Rules:
-- Max 2 text sections
-- 1 notes section at the end
-- Student-friendly language
-- Focus ONLY on the given node
-- Do NOT introduce new topics
+Teaching rules:
+- Assume user already knows basics
+- Go one level deeper than typical tutorials
+- Use mental models or real-world analogies
+- Avoid generic definitions
+- Be precise, not verbose
+
+Sections:
+1. What it is (clear but not shallow)
+2. Why it matters (real-world impact)
+3. Example or mental model (concrete)
+4. Notes section at end
+
+Return ONLY valid JSON.
             `
         });
 
