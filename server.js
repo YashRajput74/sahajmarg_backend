@@ -506,6 +506,84 @@ app.post("/flashcards/save", async (req, res) => {
     }
 });
 
+app.post("/flowchart/nodes", async (req, res) => {
+    try {
+        const { topic, level = "beginner" } = req.body;
+
+        if (!topic?.trim()) {
+            return res.status(400).json({ error: "topic required" });
+        }
+
+        const resp = await client.responses.create({
+            model: "llama-3.1-8b-instant",
+            input: `
+You are a JSON generator.
+
+Generate a flowchart structure for the topic:
+"${topic}"
+
+Return ONLY valid JSON.
+NO markdown. NO explanations.
+
+Schema:
+{
+  "root": {
+    "id": "string",
+    "title": "string",
+    "label": "Root Concept"
+  },
+  "columns": [
+    {
+      "id": "string",
+      "title": "string",
+      "subtitle": "string",
+      "nodes": [
+        {
+          "id": "string",
+          "label": "string",
+          "subtitle": "string"
+        }
+      ]
+    }
+  ]
+}
+
+This is a visual map, NOT a lesson.
+
+Return ONLY valid JSON.
+NO markdown. NO explanations.
+
+Rules:
+- Labels: short concept names (1–3 words)
+- Subtitles: scope/category hints, NOT explanations
+- Subtitles must NOT define the label
+- IDs must be stable, lowercase
+- Level: ${level}
+Subtitles:
+- Describe the category or scope
+- NOT definitions
+- NOT explanations
+- 3–6 words
+- No verbs like "explains", "handles", "manages"
+
+If you cannot comply, return:
+{ "error": "schema_violation" }
+            `
+        });
+
+        const json = safeParseJSON(resp.output_text);
+
+        if (!json || json.error) {
+            return res.status(422).json({ error: "Invalid AI output" });
+        }
+
+        res.json(json);
+
+    } catch (err) {
+        console.error("❌ /flowchart/nodes error:", err);
+        res.status(500).json({ error: "Failed to generate nodes" });
+    }
+});
 
 app.post("/flowchart/tooltips", async (req, res) => {
     try {
