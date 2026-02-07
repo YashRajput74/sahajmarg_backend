@@ -26,6 +26,7 @@ router.post("/session", (req, res) => {
         teacherExplanation: "",
         userExplanation: "",
         studentFeedback: "",
+        studentQuestion: "",
         status: "ON_TRACK"
     });
 
@@ -185,5 +186,60 @@ router.post("/teacher/feedback", (req, res) => {
     });
 });
 
+router.post("/student/question", async (req, res) => {
+    const { sessionId } = req.body;
+
+    const session = sessions.get(sessionId);
+    if (!session) {
+        return res.status(404).json({ error: "invalid session" });
+    }
+
+    const resp = await client.responses.create({
+        model: "llama-3.1-8b-instant",
+        input: `
+You are a curious but helpful co-student.
+
+Topic: ${session.topic}
+
+Teacher's explanation:
+"${session.teacherExplanation}"
+
+Your task:
+- Ask ONE clear question to test understanding
+- The question should target a key concept
+- Phrase it like a student, not a teacher
+- No hints, no explanation
+
+Return ONLY JSON.
+
+Schema:
+{
+  "question": "string",
+  "focus": "string"
+}
+
+Rules:
+- Question must be answerable in 2–3 sentences
+- Focus should be a short phrase like "mechanism", "reason", "comparison"
+- No markdown
+    `
+    });
+
+    let parsed;
+    try {
+        parsed = JSON.parse(
+            resp.output_text
+                ?.replace(/```json/i, "")
+                .replace(/```/g, "")
+                .trim()
+        );
+    } catch {
+        return res.status(422).json({ error: "Invalid AI question output" });
+    }
+
+    session.studentQuestion = parsed.question;
+
+    res.json(parsed);
+});
 
 export default router;
