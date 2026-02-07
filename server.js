@@ -8,6 +8,7 @@ import OpenAI from "openai";
 import crypto from "crypto";
 import path from "path";
 import { createRequire } from "module";
+import learningLoopRoutes from "./learningLoop.routes.js";
 
 dotenv.config();
 
@@ -838,6 +839,8 @@ app.get("/messages/:chatId", async (req, res) => {
 
     res.json(data);
 });
+
+app.use("/learning-loop", learningLoopRoutes);
 
 app.delete("/chat/:chatId", async (req, res) => {
     const { chatId } = req.params;
