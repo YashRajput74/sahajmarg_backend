@@ -18,10 +18,6 @@ const client = new OpenAI({
     baseURL: "https://api.groq.com/openai/v1",
 });
 
-/* =========================================================
-   1️⃣ CREATE MISCONCEPTION SESSION
-   ========================================================= */
-
 router.post("/misconception/session", (req, res) => {
     const { topic } = req.body;
 
@@ -39,10 +35,6 @@ router.post("/misconception/session", (req, res) => {
 
     res.json({ sessionId, topic });
 });
-
-/* =========================================================
-   2️⃣ GET COMMON MISCONCEPTIONS FOR A TOPIC
-   ========================================================= */
 
 router.post("/misconception/list", async (req, res) => {
     const { topic, count = 6 } = req.body;
@@ -90,7 +82,6 @@ Rules:
         return res.status(422).json({ error: "Invalid AI output" });
     }
 
-    // Add stable IDs if model didn't
     const myths = parsed.map((m, i) => ({
         id: m.id || `myth_${i + 1}`,
         ...m,
@@ -99,9 +90,6 @@ Rules:
     res.json({ topic, myths });
 });
 
-/* =========================================================
-   3️⃣ EVALUATE USER ANSWER + EXPLANATION
-   ========================================================= */
 
 router.post("/misconception/evaluate", async (req, res) => {
     const {
@@ -175,7 +163,6 @@ Rules:
         return res.status(422).json({ error: "Invalid AI output" });
     }
 
-    // Safety check
     if (!parsed.mood || !parsed.response) {
         return res.status(422).json({ error: "Incomplete AI output" });
     }
