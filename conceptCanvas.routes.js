@@ -65,6 +65,11 @@ Rules:
 - Use short, clear wording
 - No markdown
 - No explanation text outside JSON
+- Do NOT repeat items
+- Do NOT invent extra fields
+- Always use "correct" for answers
+- For reorder, all items must be unique
+
 `;
 
     let resp;
