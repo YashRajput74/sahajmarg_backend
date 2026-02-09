@@ -69,6 +69,9 @@ Rules:
 - Do NOT invent extra fields
 - Always use "correct" for answers
 - For reorder, all items must be unique
+- For match activities, include an "options" array with all possible matches
+- For checkbox activities, "correct" MUST be an array of strings
+- Avoid ambiguous or trick statements
 
 `;
 
