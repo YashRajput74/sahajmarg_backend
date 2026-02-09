@@ -10,6 +10,7 @@ import path from "path";
 import { createRequire } from "module";
 import learningLoopRoutes from "./learningLoop.routes.js";
 import moodyAssistantRoutes from "./moodyAssistant.routes.js";
+import conceptCanvasRoutes from "./conceptCanvas.routes.js";
 
 dotenv.config();
 
@@ -844,6 +845,8 @@ app.get("/messages/:chatId", async (req, res) => {
 app.use("/learning-loop", learningLoopRoutes);
 
 app.use("/learning", moodyAssistantRoutes);
+
+app.use("/api", conceptCanvasRoutes);
 
 app.delete("/chat/:chatId", async (req, res) => {
     const { chatId } = req.params;
